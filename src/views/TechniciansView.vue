@@ -8,6 +8,7 @@ import {
   type Technician,
   type CreateTechnicianRequest,
 } from '../services/technicianService'
+import { getApiErrorMessage } from '../utils/apiError'
 
 const technicians = ref<Technician[]>([])
 const searchText = ref('')
@@ -42,14 +43,23 @@ const filteredTechnicians = computed(() => {
   })
 })
 
+function clearMessages() {
+  successMessage.value = ''
+  errorMessage.value = ''
+}
+
 async function loadTechnicians() {
   try {
     isLoading.value = true
     errorMessage.value = ''
     technicians.value = await getTechnicians()
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Technician API error:', error)
-    errorMessage.value = 'Unable to load technicians. Please verify the API is running.'
+
+    errorMessage.value = getApiErrorMessage(
+      error,
+      'Unable to load technicians. Please verify the API is running.',
+    )
   } finally {
     isLoading.value = false
   }
@@ -57,19 +67,16 @@ async function loadTechnicians() {
 
 function resetForm() {
   editingTechnicianId.value = null
+
   form.value = {
     fullName: '',
     email: '',
   }
 }
 
-function clearMessages() {
-  successMessage.value = ''
-  errorMessage.value = ''
-}
-
 function startEdit(technician: Technician) {
   editingTechnicianId.value = technician.technicianId
+
   form.value = {
     fullName: technician.fullName,
     email: technician.email,
@@ -106,18 +113,13 @@ async function handleSubmitTechnician() {
 
     resetForm()
     await loadTechnicians()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Save technician error:', error)
 
-    if (error.response?.data?.errors) {
-      errorMessage.value = Object.values(error.response.data.errors).flat().join(' ')
-    } else if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to save technician. Please verify the form data and API.'
-    }
+    errorMessage.value = getApiErrorMessage(
+      error,
+      'Unable to save technician. Please verify the form data and API.',
+    )
   } finally {
     isSaving.value = false
   }
@@ -141,16 +143,13 @@ async function handleDeactivateTechnician(technician: Technician) {
     if (editingTechnicianId.value === technician.technicianId) {
       resetForm()
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Deactivate technician error:', error)
 
-    if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to deactivate technician. Please verify the API.'
-    }
+    errorMessage.value = getApiErrorMessage(
+      error,
+      'Unable to deactivate technician. Please verify the API.',
+    )
   }
 }
 

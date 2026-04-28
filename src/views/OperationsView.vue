@@ -10,6 +10,7 @@ import {
 } from '../services/operationService'
 import { getServiceOrders, type ServiceOrder } from '../services/serviceOrderService'
 import { getTechnicians, type Technician } from '../services/technicianService'
+import { getApiErrorMessage } from '../utils/apiError'
 
 const operations = ref<ServiceOrderOperation[]>([])
 const serviceOrders = ref<ServiceOrder[]>([])
@@ -119,12 +120,16 @@ async function loadLookups() {
   serviceOrders.value = await getServiceOrders()
   technicians.value = await getTechnicians()
 
-  if (!selectedServiceOrderId.value && openServiceOrders.value.length > 0) {
-    selectedServiceOrderId.value = openServiceOrders.value[0].serviceOrderId
+  const firstOpenServiceOrder = openServiceOrders.value[0]
+
+  if (!selectedServiceOrderId.value && firstOpenServiceOrder) {
+    selectedServiceOrderId.value = firstOpenServiceOrder.serviceOrderId
   }
 
-  if (!form.value.technicianId && activeTechnicians.value.length > 0) {
-    form.value.technicianId = activeTechnicians.value[0].technicianId
+  const firstActiveTechnician = activeTechnicians.value[0]
+
+  if (!form.value.technicianId && firstActiveTechnician) {
+    form.value.technicianId = firstActiveTechnician.technicianId
   }
 }
 
@@ -139,18 +144,13 @@ async function loadOperations() {
     clearMessages()
 
     operations.value = await getOperationsByServiceOrder(Number(selectedServiceOrderId.value))
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Operation API error:', error)
 
-    if (error.response?.status === 404) {
-      errorMessage.value = `Service Order ID ${selectedServiceOrderId.value} was not found.`
-    } else if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to load operations. Please verify the API is running.'
-    }
+    errorMessage.value = getApiErrorMessage(
+      error,
+      `Unable to load operations for Service Order ID ${selectedServiceOrderId.value}.`,
+    )
   } finally {
     isLoading.value = false
   }
@@ -217,25 +217,13 @@ async function handleSubmitOperation() {
     resetForm()
     await loadOperations()
     await loadLookups()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Save operation error:', error)
 
-    if (error.response?.status === 400) {
-      errorMessage.value =
-        error.response?.data?.message ||
-        error.response?.data?.title ||
-        'Unable to save operation. The service order may be closed or the data is invalid.'
-    } else if (error.response?.status === 404) {
-      errorMessage.value = 'Service order or technician was not found. Please verify the IDs.'
-    } else if (error.response?.data?.errors) {
-      errorMessage.value = Object.values(error.response.data.errors).flat().join(' ')
-    } else if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to save operation. Please verify the form data and API.'
-    }
+    errorMessage.value = getApiErrorMessage(
+      error,
+      'Unable to save operation. The service order may be closed or the data is invalid.',
+    )
   } finally {
     isSaving.value = false
   }
@@ -255,30 +243,30 @@ async function handleDeleteOperation(operation: ServiceOrderOperation) {
 
     successMessage.value = 'Operation deleted successfully.'
     await loadOperations()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete operation error:', error)
 
-    if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to delete operation. Please verify the API.'
-    }
+    errorMessage.value = getApiErrorMessage(
+      error,
+      'Unable to delete operation. Please verify the API.',
+    )
   }
 }
 
 async function initializePage() {
   try {
     isLoading.value = true
+    clearMessages()
+
     await loadLookups()
 
     if (selectedServiceOrderId.value) {
       await loadOperations()
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Initialize operations page error:', error)
-    errorMessage.value = 'Unable to initialize operations page.'
+
+    errorMessage.value = getApiErrorMessage(error, 'Unable to initialize operations page.')
   } finally {
     isLoading.value = false
   }

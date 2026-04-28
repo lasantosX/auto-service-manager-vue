@@ -8,6 +8,7 @@ import {
   type ServiceOrder,
   type CreateServiceOrderRequest,
 } from '../services/serviceOrderService'
+import { getApiErrorMessage } from '../utils/apiError'
 
 const serviceOrders = ref<ServiceOrder[]>([])
 const searchText = ref('')
@@ -22,7 +23,7 @@ const form = ref<CreateServiceOrderRequest>({
 })
 
 const statusForm = ref({
-  status: 1,
+  status: 2,
 })
 
 const filteredServiceOrders = computed(() => {
@@ -59,18 +60,9 @@ function getStatusLabel(status: number): string {
 }
 
 function getStatusClass(status: number): string {
-  if (status === 4) {
-    return 'status-closed'
-  }
-
-  if (status === 3) {
-    return 'status-completed'
-  }
-
-  if (status === 2) {
-    return 'status-progress'
-  }
-
+  if (status === 4) return 'status-closed'
+  if (status === 3) return 'status-completed'
+  if (status === 2) return 'status-progress'
   return 'status-open'
 }
 
@@ -89,19 +81,6 @@ function formatDate(value?: string | null): string {
   return new Date(value).toLocaleString()
 }
 
-async function loadServiceOrders() {
-  try {
-    isLoading.value = true
-    errorMessage.value = ''
-    serviceOrders.value = await getServiceOrders()
-  } catch (error) {
-    console.error('Service Order API error:', error)
-    errorMessage.value = 'Unable to load service orders. Please verify the API is running.'
-  } finally {
-    isLoading.value = false
-  }
-}
-
 function clearMessages() {
   successMessage.value = ''
   errorMessage.value = ''
@@ -110,6 +89,23 @@ function clearMessages() {
 function resetForm() {
   form.value = {
     vehicleId: 1,
+  }
+}
+
+async function loadServiceOrders() {
+  try {
+    isLoading.value = true
+    errorMessage.value = ''
+    serviceOrders.value = await getServiceOrders()
+  } catch (error: unknown) {
+    console.error('Service Order API error:', error)
+
+    errorMessage.value = getApiErrorMessage(
+      error,
+      'Unable to load service orders. Please verify the API is running.',
+    )
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -126,7 +122,7 @@ function startStatusEdit(order: ServiceOrder) {
 function cancelStatusEdit() {
   editingServiceOrderId.value = null
   statusForm.value = {
-    status: 1,
+    status: 2,
   }
 }
 
@@ -142,20 +138,13 @@ async function handleCreateServiceOrder() {
     successMessage.value = 'Service order created successfully.'
     resetForm()
     await loadServiceOrders()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create service order error:', error)
 
-    if (error.response?.status === 404) {
-      errorMessage.value = `Vehicle ID ${form.value.vehicleId} was not found. Please use an existing vehicle.`
-    } else if (error.response?.data?.errors) {
-      errorMessage.value = Object.values(error.response.data.errors).flat().join(' ')
-    } else if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to create service order. Please verify the vehicle ID and API.'
-    }
+    errorMessage.value = getApiErrorMessage(
+      error,
+      `Vehicle ID ${form.value.vehicleId} was not found. Please use an existing vehicle.`,
+    )
   } finally {
     isSaving.value = false
   }
@@ -191,18 +180,10 @@ async function handleUpdateStatus() {
     successMessage.value = 'Service order status updated successfully.'
     cancelStatusEdit()
     await loadServiceOrders()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update service order status error:', error)
 
-    if (error.response?.data?.errors) {
-      errorMessage.value = Object.values(error.response.data.errors).flat().join(' ')
-    } else if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to update service order status.'
-    }
+    errorMessage.value = getApiErrorMessage(error, 'Unable to update service order status.')
   } finally {
     isSaving.value = false
   }
@@ -226,16 +207,13 @@ async function handleCloseServiceOrder(order: ServiceOrder) {
     if (editingServiceOrderId.value === order.serviceOrderId) {
       cancelStatusEdit()
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Close service order error:', error)
 
-    if (error.response?.data?.message) {
-      errorMessage.value = error.response.data.message
-    } else if (error.response?.data?.title) {
-      errorMessage.value = error.response.data.title
-    } else {
-      errorMessage.value = 'Unable to close service order. Please verify the API.'
-    }
+    errorMessage.value = getApiErrorMessage(
+      error,
+      'Unable to close service order. Please verify the API.',
+    )
   }
 }
 
