@@ -1,7 +1,14 @@
-import httpClient from '@/api/httpClient'
+import httpClient from '../api/httpClient'
 
 export interface Customer {
   customerId: number
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+}
+
+export interface CreateCustomerRequest {
   firstName: string
   lastName: string
   email: string
@@ -21,4 +28,9 @@ interface PagedResult<T> {
 export async function getCustomers(): Promise<Customer[]> {
   const response = await httpClient.get<PagedResult<Customer>>('/Customers')
   return response.data.items
+}
+
+export async function createCustomer(customer: CreateCustomerRequest): Promise<Customer> {
+  const response = await httpClient.post<Customer>('/Customers', customer)
+  return response.data
 }
