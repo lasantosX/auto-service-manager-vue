@@ -97,5 +97,6 @@ import { RouterLink, RouterView } from 'vue-router'
 .content {
   padding: 40px;
   overflow-x: hidden;
+  min-width: 0;
 }
 </style>

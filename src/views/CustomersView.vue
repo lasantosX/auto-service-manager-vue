@@ -1,23 +1,43 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   getCustomers,
   createCustomer,
+  updateCustomer,
+  deleteCustomer,
   type Customer,
   type CreateCustomerRequest,
 } from '../services/customerService'
 
 const customers = ref<Customer[]>([])
+const searchText = ref('')
 const isLoading = ref(false)
 const isSaving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const editingCustomerId = ref<number | null>(null)
 
 const form = ref<CreateCustomerRequest>({
   firstName: '',
   lastName: '',
   email: '',
   phone: '',
+})
+
+const filteredCustomers = computed(() => {
+  const term = searchText.value.trim().toLowerCase()
+
+  if (!term) {
+    return customers.value
+  }
+
+  return customers.value.filter((customer) => {
+    const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase()
+    const email = customer.email.toLowerCase()
+    const phone = customer.phone?.toLowerCase() ?? ''
+
+    return fullName.includes(term) || email.includes(term) || phone.includes(term)
+  })
 })
 
 async function loadCustomers() {
@@ -33,33 +53,91 @@ async function loadCustomers() {
   }
 }
 
-async function handleCreateCustomer() {
+function resetForm() {
+  editingCustomerId.value = null
+  form.value = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+  }
+}
+
+function clearMessages() {
+  successMessage.value = ''
+  errorMessage.value = ''
+}
+
+function startEdit(customer: Customer) {
+  editingCustomerId.value = customer.customerId
+  form.value = {
+    firstName: customer.firstName,
+    lastName: customer.lastName,
+    email: customer.email,
+    phone: customer.phone || '',
+  }
+
+  clearMessages()
+}
+
+async function handleSubmitCustomer() {
   try {
     isSaving.value = true
-    errorMessage.value = ''
-    successMessage.value = ''
+    clearMessages()
 
-    await createCustomer({
-      firstName: form.value.firstName,
-      lastName: form.value.lastName,
-      email: form.value.email,
-      phone: form.value.phone || undefined,
-    })
+    if (editingCustomerId.value) {
+      await updateCustomer(editingCustomerId.value, {
+        firstName: form.value.firstName,
+        lastName: form.value.lastName,
+        email: form.value.email,
+        phone: form.value.phone || undefined,
+      })
 
-    form.value = {
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
+      successMessage.value = 'Customer updated successfully.'
+    } else {
+      await createCustomer({
+        firstName: form.value.firstName,
+        lastName: form.value.lastName,
+        email: form.value.email,
+        phone: form.value.phone || undefined,
+      })
+
+      successMessage.value = 'Customer created successfully.'
     }
 
-    successMessage.value = 'Customer created successfully.'
+    resetForm()
     await loadCustomers()
   } catch (error) {
-    console.error('Create customer error:', error)
-    errorMessage.value = 'Unable to create customer. Please verify the form data and API.'
+    console.error('Save customer error:', error)
+    errorMessage.value = 'Unable to save customer. Please verify the form data and API.'
   } finally {
     isSaving.value = false
+  }
+}
+
+async function handleDeleteCustomer(customer: Customer) {
+  const confirmed = window.confirm(
+    `Are you sure you want to delete ${customer.firstName} ${customer.lastName}?`,
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    clearMessages()
+
+    await deleteCustomer(customer.customerId)
+
+    successMessage.value = 'Customer deleted successfully.'
+    await loadCustomers()
+
+    if (editingCustomerId.value === customer.customerId) {
+      resetForm()
+    }
+  } catch (error) {
+    console.error('Delete customer error:', error)
+    errorMessage.value = 'Unable to delete customer. Please verify the API.'
   }
 }
 
@@ -77,8 +155,14 @@ onMounted(loadCustomers)
       <button @click="loadCustomers">Refresh</button>
     </div>
 
-    <form class="form-card" @submit.prevent="handleCreateCustomer">
-      <h3>Add Customer</h3>
+    <form class="form-card" @submit.prevent="handleSubmitCustomer">
+      <div class="form-title">
+        <h3>{{ editingCustomerId ? 'Edit Customer' : 'Add Customer' }}</h3>
+
+        <button v-if="editingCustomerId" type="button" class="secondary-button" @click="resetForm">
+          Cancel Edit
+        </button>
+      </div>
 
       <div class="form-grid">
         <input v-model="form.firstName" type="text" placeholder="First name" required />
@@ -88,7 +172,7 @@ onMounted(loadCustomers)
       </div>
 
       <button type="submit" :disabled="isSaving">
-        {{ isSaving ? 'Saving...' : 'Create Customer' }}
+        {{ isSaving ? 'Saving...' : editingCustomerId ? 'Update Customer' : 'Create Customer' }}
       </button>
     </form>
 
@@ -103,27 +187,57 @@ onMounted(loadCustomers)
     </div>
 
     <div v-else class="table-card">
-      <table>
+      <div class="table-toolbar">
+        <div>
+          <h3>Customer List</h3>
+          <p>
+            Showing {{ filteredCustomers.length }} of {{ customers.length }} customer{{
+              customers.length === 1 ? '' : 's'
+            }}.
+          </p>
+        </div>
+
+        <div class="search-box">
+          <input v-model="searchText" type="text" placeholder="Search by name, email, or phone" />
+
+          <button v-if="searchText" type="button" class="secondary-button" @click="searchText = ''">
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <table v-if="filteredCustomers.length > 0">
         <thead>
           <tr>
             <th>Name</th>
             <th>Email</th>
             <th>Phone</th>
+            <th class="actions-column">Actions</th>
           </tr>
         </thead>
 
         <tbody>
-          <tr v-for="customer in customers" :key="customer.customerId">
+          <tr v-for="customer in filteredCustomers" :key="customer.customerId">
             <td>{{ customer.firstName }} {{ customer.lastName }}</td>
             <td>{{ customer.email }}</td>
             <td>{{ customer.phone || '-' }}</td>
-          </tr>
+            <td class="actions">
+              <button type="button" class="secondary-button" @click="startEdit(customer)">
+                Edit
+              </button>
 
-          <tr v-if="customers.length === 0">
-            <td colspan="3" class="empty">No customers found.</td>
+              <button type="button" class="danger-button" @click="handleDeleteCustomer(customer)">
+                Delete
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
+
+      <div v-else class="empty-state">
+        <h4>No customers found</h4>
+        <p>Try adjusting your search or create a new customer.</p>
+      </div>
     </div>
   </section>
 </template>
@@ -160,6 +274,16 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.secondary-button {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.danger-button {
+  background: #dc2626;
+  color: white;
+}
+
 .form-card,
 .table-card,
 .status-card,
@@ -172,8 +296,18 @@ button:disabled {
   margin-bottom: 24px;
 }
 
-.form-card h3 {
-  margin: 0 0 16px;
+.form-title,
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.form-title h3,
+.table-toolbar h3 {
+  margin: 0 0 4px;
 }
 
 .form-grid {
@@ -183,7 +317,14 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+.search-box {
+  display: flex;
+  gap: 10px;
+  min-width: 420px;
+}
+
 input {
+  width: 100%;
   border: 1px solid #d1d5db;
   border-radius: 10px;
   padding: 11px 12px;
@@ -219,8 +360,38 @@ th {
   font-size: 14px;
 }
 
-.empty {
+.actions-column {
+  width: 180px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.empty-state {
   text-align: center;
+  padding: 48px 24px;
   color: #6b7280;
+}
+
+.empty-state h4 {
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search-box {
+    min-width: 0;
+  }
 }
 </style>
