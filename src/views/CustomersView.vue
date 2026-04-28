@@ -1,10 +1,24 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getCustomers, type Customer } from '@/services/customerService'
+import {
+  getCustomers,
+  createCustomer,
+  type Customer,
+  type CreateCustomerRequest,
+} from '../services/customerService'
 
 const customers = ref<Customer[]>([])
 const isLoading = ref(false)
+const isSaving = ref(false)
 const errorMessage = ref('')
+const successMessage = ref('')
+
+const form = ref<CreateCustomerRequest>({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+})
 
 async function loadCustomers() {
   try {
@@ -12,10 +26,40 @@ async function loadCustomers() {
     errorMessage.value = ''
     customers.value = await getCustomers()
   } catch (error) {
+    console.error('Customer API error:', error)
     errorMessage.value = 'Unable to load customers. Please verify the API is running.'
-    console.error(error)
   } finally {
     isLoading.value = false
+  }
+}
+
+async function handleCreateCustomer() {
+  try {
+    isSaving.value = true
+    errorMessage.value = ''
+    successMessage.value = ''
+
+    await createCustomer({
+      firstName: form.value.firstName,
+      lastName: form.value.lastName,
+      email: form.value.email,
+      phone: form.value.phone || undefined,
+    })
+
+    form.value = {
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+    }
+
+    successMessage.value = 'Customer created successfully.'
+    await loadCustomers()
+  } catch (error) {
+    console.error('Create customer error:', error)
+    errorMessage.value = 'Unable to create customer. Please verify the form data and API.'
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -31,6 +75,25 @@ onMounted(loadCustomers)
       </div>
 
       <button @click="loadCustomers">Refresh</button>
+    </div>
+
+    <form class="form-card" @submit.prevent="handleCreateCustomer">
+      <h3>Add Customer</h3>
+
+      <div class="form-grid">
+        <input v-model="form.firstName" type="text" placeholder="First name" required />
+        <input v-model="form.lastName" type="text" placeholder="Last name" required />
+        <input v-model="form.email" type="email" placeholder="Email" required />
+        <input v-model="form.phone" type="text" placeholder="Phone" />
+      </div>
+
+      <button type="submit" :disabled="isSaving">
+        {{ isSaving ? 'Saving...' : 'Create Customer' }}
+      </button>
+    </form>
+
+    <div v-if="successMessage" class="success-card">
+      {{ successMessage }}
     </div>
 
     <div v-if="isLoading" class="status-card">Loading customers...</div>
@@ -92,17 +155,51 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.form-card,
 .table-card,
 .status-card,
-.error-card {
+.error-card,
+.success-card {
   background: white;
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
+  margin-bottom: 24px;
+}
+
+.form-card h3 {
+  margin: 0 0 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+input {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 11px 12px;
+  outline: none;
+}
+
+input:focus {
+  border-color: #2563eb;
 }
 
 .error-card {
   color: #b91c1c;
+}
+
+.success-card {
+  color: #166534;
 }
 
 table {
