@@ -4,6 +4,7 @@ import CustomersView from '../views/CustomersView.vue'
 import VehiclesView from '../views/VehiclesView.vue'
 import TechniciansView from '../views/TechniciansView.vue'
 import ServiceOrdersView from '../views/ServiceOrdersView.vue'
+import OperationsView from '../views/OperationsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,6 +33,11 @@ const router = createRouter({
       path: '/service-orders',
       name: 'service-orders',
       component: ServiceOrdersView,
+    },
+    {
+      path: '/operations',
+      name: 'operations',
+      component: OperationsView,
     },
   ],
 })
