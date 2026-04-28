@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   getCustomers,
   createCustomer,
@@ -10,6 +10,7 @@ import {
 } from '../services/customerService'
 
 const customers = ref<Customer[]>([])
+const searchText = ref('')
 const isLoading = ref(false)
 const isSaving = ref(false)
 const errorMessage = ref('')
@@ -21,6 +22,22 @@ const form = ref<CreateCustomerRequest>({
   lastName: '',
   email: '',
   phone: '',
+})
+
+const filteredCustomers = computed(() => {
+  const term = searchText.value.trim().toLowerCase()
+
+  if (!term) {
+    return customers.value
+  }
+
+  return customers.value.filter((customer) => {
+    const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase()
+    const email = customer.email.toLowerCase()
+    const phone = customer.phone?.toLowerCase() ?? ''
+
+    return fullName.includes(term) || email.includes(term) || phone.includes(term)
+  })
 })
 
 async function loadCustomers() {
@@ -46,6 +63,11 @@ function resetForm() {
   }
 }
 
+function clearMessages() {
+  successMessage.value = ''
+  errorMessage.value = ''
+}
+
 function startEdit(customer: Customer) {
   editingCustomerId.value = customer.customerId
   form.value = {
@@ -55,15 +77,13 @@ function startEdit(customer: Customer) {
     phone: customer.phone || '',
   }
 
-  successMessage.value = ''
-  errorMessage.value = ''
+  clearMessages()
 }
 
 async function handleSubmitCustomer() {
   try {
     isSaving.value = true
-    errorMessage.value = ''
-    successMessage.value = ''
+    clearMessages()
 
     if (editingCustomerId.value) {
       await updateCustomer(editingCustomerId.value, {
@@ -105,8 +125,7 @@ async function handleDeleteCustomer(customer: Customer) {
   }
 
   try {
-    errorMessage.value = ''
-    successMessage.value = ''
+    clearMessages()
 
     await deleteCustomer(customer.customerId)
 
@@ -168,7 +187,26 @@ onMounted(loadCustomers)
     </div>
 
     <div v-else class="table-card">
-      <table>
+      <div class="table-toolbar">
+        <div>
+          <h3>Customer List</h3>
+          <p>
+            Showing {{ filteredCustomers.length }} of {{ customers.length }} customer{{
+              customers.length === 1 ? '' : 's'
+            }}.
+          </p>
+        </div>
+
+        <div class="search-box">
+          <input v-model="searchText" type="text" placeholder="Search by name, email, or phone" />
+
+          <button v-if="searchText" type="button" class="secondary-button" @click="searchText = ''">
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <table v-if="filteredCustomers.length > 0">
         <thead>
           <tr>
             <th>Name</th>
@@ -179,7 +217,7 @@ onMounted(loadCustomers)
         </thead>
 
         <tbody>
-          <tr v-for="customer in customers" :key="customer.customerId">
+          <tr v-for="customer in filteredCustomers" :key="customer.customerId">
             <td>{{ customer.firstName }} {{ customer.lastName }}</td>
             <td>{{ customer.email }}</td>
             <td>{{ customer.phone || '-' }}</td>
@@ -193,12 +231,13 @@ onMounted(loadCustomers)
               </button>
             </td>
           </tr>
-
-          <tr v-if="customers.length === 0">
-            <td colspan="4" class="empty">No customers found.</td>
-          </tr>
         </tbody>
       </table>
+
+      <div v-else class="empty-state">
+        <h4>No customers found</h4>
+        <p>Try adjusting your search or create a new customer.</p>
+      </div>
     </div>
   </section>
 </template>
@@ -257,15 +296,18 @@ button:disabled {
   margin-bottom: 24px;
 }
 
-.form-title {
+.form-title,
+.table-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  gap: 16px;
 }
 
-.form-title h3 {
-  margin: 0;
+.form-title h3,
+.table-toolbar h3 {
+  margin: 0 0 4px;
 }
 
 .form-grid {
@@ -275,7 +317,14 @@ button:disabled {
   margin-bottom: 16px;
 }
 
+.search-box {
+  display: flex;
+  gap: 10px;
+  min-width: 420px;
+}
+
 input {
+  width: 100%;
   border: 1px solid #d1d5db;
   border-radius: 10px;
   padding: 11px 12px;
@@ -320,8 +369,29 @@ th {
   gap: 8px;
 }
 
-.empty {
+.empty-state {
   text-align: center;
+  padding: 48px 24px;
   color: #6b7280;
+}
+
+.empty-state h4 {
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search-box {
+    min-width: 0;
+  }
 }
 </style>
